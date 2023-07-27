@@ -28,17 +28,8 @@ def getHWSet():
         
 # This method updates the database to reflect new available value of hardware
 # when user checks in/checks out number of units specified by quantity
-@app.route('/placeorder/<user_hw_request>', methods=['POST'])
+@app.route('/placeorder/user_hw_request', methods=['POST'])
 def handleResources(user_hw_request):
-    # user_hw_request = { #for testing. remove
-    #     "hardwareSet1": {
-    #         "quantity": 5
-    #     },
-    #     "hardwareSet2": {
-    #         "quantity": 5
-    #     },
-    #     "type": "checkout"
-    # }
     type = user_hw_request['type']
     err = {
         "error": {
@@ -89,6 +80,7 @@ def handleResources(user_hw_request):
                 # call method to update the database    
                 updateDB(availability, hwSet)
     
+    # TODO: return json that includes new availability
     return 'Success' 
 
 # This method updates the database with new Availability values
@@ -96,7 +88,6 @@ def updateDB(availability, hwSet):
     try:
         newValues = { '$set': { 'Available': availability } }
         inserted_data = collection.update_one({'HardwareSet': hwSet}, newValues)
-        return str(inserted_data)
     except:
         print("An exception occurred :", e)
         return e
