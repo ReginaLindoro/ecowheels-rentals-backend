@@ -1,0 +1,57 @@
+from flask import Flask, jsonify, request
+from pymongo import MongoClient
+import bson.json_util as json_util
+import certifi
+import json
+
+
+app = Flask(__name__)
+
+ca = certifi.where()
+
+#TODO: take configurations outside
+# MongoDB configuration
+MONGO_URI = 'mongodb+srv://ADAP:ADAP@adapdb.g2igjno.mongodb.net/?retryWrites=true&w=majority'
+DB_NAME = 'ADAPdb'
+DB_COLLECTION = 'Resources'
+
+# Connect to database
+client = MongoClient(MONGO_URI, tlsCAFile=ca)
+db = client[DB_NAME]
+collection = db[DB_COLLECTION]
+
+# This method gets hardware information from the database
+@app.route('/api/hardware', methods=['GET'])
+def getHWSet():
+    try:
+        hwSetData = collection.find()
+        hardware_data = {}
+        
+        err = {
+            "error": {
+                "code":100,
+                "message": "Error!"
+            }
+        }
+        
+        for entry in hwSetData:
+            hardware_name = f"hardwareSet{entry['HardwareSet']}"
+            hardware_data[hardware_name] = {
+                "capacity": entry['Capacity'],
+                "availability": entry['Available']
+            }
+
+        result = {
+            "code": 200,
+            "data": hardware_data,
+            "message": "Success"
+        }
+
+        return jsonify(result)
+    
+    except Exception as e:
+        return jsonify(err), 500
+
+# Existing code...
+if __name__ == '__main__':
+    app.run(debug=True)
