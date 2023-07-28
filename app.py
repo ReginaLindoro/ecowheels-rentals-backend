@@ -11,34 +11,49 @@ ca = certifi.where()
 
 #TODO: take configurations outside
 # MongoDB configuration
-MONGO_URI = 'mongodb+srv://{DB_USER}:{DB_USER_PASS}@adapdb.g2igjno.mongodb.net/?retryWrites=true&w=majority'
-DB_NAME = 'ADAPdb'
 DB_USER = 'ADAP'
 DB_USER_PASS = 'ADAP'
+MONGO_URI = f'mongodb+srv://{DB_USER}:{DB_USER_PASS}@adapdb.g2igjno.mongodb.net/?retryWrites=true&w=majority'
+DB_NAME = 'ADAPdb'
 
 # Connect to database
 client = MongoClient(MONGO_URI, tlsCAFile=ca)
 db = client[DB_NAME]
 collection = db['Resources']
 
+# variables
+err = {
+    "error": {
+        "code":100,
+    "message": "Error!"
+        }
+}
+
 # This method gets hardware information from the database
+@app.route('/getDBHardwareData', methods=['POST'])
 def getHWSet():
-    hwSetData = collection.find()
-    return json_util.dumps(hwSetData)
+    try:
+        hwSetData = collection.find()
+        return json_util.dumps(hwSetData)
+    except:
+        return err
         
 # This method updates the database to reflect new available value of hardware
 # when user checks in/checks out number of units specified by quantity
-@app.route('/placeorder/user_hw_request', methods=['POST'])
+@app.route('/placeorder/<user_hw_request>', methods=['GET', 'POST'])
 def handleResources(user_hw_request):
-    type = user_hw_request['type']
-    err = {
-        "error": {
-            "code":100,
-            "message": "Error!"
-        }
+    user_hw_request = {
+        "hardwareSet1": {
+            "quantity": 20
+        },
+        "hardwareSet2": {
+            "quantity": 20
+        },
+        "type": "checkout"
     }
-
+    type = user_hw_request['type']
     data = getHWSet()
+    # return data
     db_hardware_sets = json.loads(data)
     # set hardwareSets variables
     capacity_hwSet1 = db_hardware_sets[0]['Capacity']
@@ -47,6 +62,8 @@ def handleResources(user_hw_request):
     availability_hwSet2 = db_hardware_sets[1]['Available']
     checkedOut_hwSet1 = capacity_hwSet1 - availability_hwSet1
     checkedOut_hwSet2 = capacity_hwSet2 - availability_hwSet2
+    
+    hw_new_data = {}
 
     # loop through user hardware request information
     for key, value in user_hw_request.items():
@@ -75,22 +92,24 @@ def handleResources(user_hw_request):
                     if quantity <= int(availability):
                         availability -= quantity
                     else:
-                        return err
+                        return err 
                     
                 # call method to update the database    
                 updateDB(availability, hwSet)
+
+                # update hw_new_data dictionary to return as a response
+                hw_new_data.update( {f"HardwareSet{hwSet}": {"available": availability} })
     
-    # TODO: return json that includes new availability
-    return 'Success' 
+    hw_new_data.update({"code": "Success"})
+    return str(hw_new_data)
 
 # This method updates the database with new Availability values
 def updateDB(availability, hwSet):
     try:
         newValues = { '$set': { 'Available': availability } }
-        inserted_data = collection.update_one({'HardwareSet': hwSet}, newValues)
+        collection.update_one({'HardwareSet': hwSet}, newValues)
     except:
-        print("An exception occurred :", e)
-        return e
+        return err
 
 if __name__ == '__main__':
     app.run(debug=True)
