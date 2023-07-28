@@ -42,19 +42,9 @@ def getHWSet():
 # when user checks in/checks out number of units specified by quantity
 @app.route('/placeorder/<user_hw_request>', methods=['GET', 'POST'])
 def handleResources(user_hw_request):
-    user_hw_request = {
-        "hardwareSet1": {
-            "quantity": 20
-        },
-        "hardwareSet2": {
-            "quantity": 20
-        },
-        "type": "checkout"
-    }
-    type = user_hw_request['type']
     data = getHWSet()
-    # return data
     db_hardware_sets = json.loads(data)
+
     # set hardwareSets variables
     capacity_hwSet1 = db_hardware_sets[0]['Capacity']
     capacity_hwSet2 = db_hardware_sets[1]['Capacity']
@@ -63,6 +53,7 @@ def handleResources(user_hw_request):
     checkedOut_hwSet1 = capacity_hwSet1 - availability_hwSet1
     checkedOut_hwSet2 = capacity_hwSet2 - availability_hwSet2
     
+    type = user_hw_request['type']
     hw_new_data = {}
 
     # loop through user hardware request information
