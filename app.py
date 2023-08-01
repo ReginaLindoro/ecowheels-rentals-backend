@@ -64,7 +64,7 @@ def confirmLoginInfo():
 #register user
 #route for register
 @app.route('/api/register', methods=["POST"])
-def test_add():
+def register_user():
     #storing the request object
     object = request.json
     username = object['username']
