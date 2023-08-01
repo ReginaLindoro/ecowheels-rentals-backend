@@ -6,6 +6,7 @@ import bson.json_util as json_util
 import certifi
 import json
 from flask_cors import CORS
+import bcrypt
 
 app = Flask(__name__)
 CORS(app)
@@ -55,6 +56,99 @@ def getHWSet():
 @app.route('/api/login', methods=['POST'])
 def confirmLoginInfo():
     return jsonify({'success': True})
+
+#TODO: move in different files
+#make utility functions
+#make a standard object creation function
+
+#register user
+#route for register
+@app.route('/api/register', methods=["POST"])
+def register_user():
+    #storing the request object
+    object = request.json
+    username = object['username']
+    password = object['password']
+
+    returnObject = addUser(username=username, password=encrypt(password))
+    return jsonify(returnObject)
+
+#add user to db
+def addUser(username, password):
+    try:
+        # Connect to database
+        client = MongoClient(MONGO_URI, tlsCAFile=ca)
+        db = client[DB_NAME]
+        #getting the collection
+        usersCollection = db['Users']
+
+        #check if the collection if empty of not -> to avoid the first user registration
+        if len(list(usersCollection.find())):
+            #checking for the username passed in the request, if already exists, return an object with an error
+            if usersCollection.find_one({'username' : username}):
+                returnObject = {
+                    'code' : 409,
+                    'data'  : {
+                        'message' : 'User already exists'
+                    },
+                    'message' : 'Failure'
+                }
+                return returnObject
+            
+        #create a new user
+        newUser = {
+            'username' : username, 
+            'password' : password,
+        }
+
+        #insert user in the users collection
+        usersCollection.insert_one(newUser)
+        client.close()
+        #print acknowledgement      
+        print('User added successfully!')
+        #return the success object
+        returnObject = {
+                    'code' : 200,
+                    'data'  : {
+                        'message' : 'User added successfully!'
+                    },
+                    'message' : 'Success'
+                }
+        return returnObject
+    except PyMongoError as e:
+        # Handle database-related errors
+        client.close()
+        #return the faiure object
+        returnObject = {
+                    'code' : 500,
+                    'data'  : {
+                        'message' : 'Database error: ' + str(e)
+                    },
+                    'message' : 'Failure'
+                }
+        return returnObject
+    except Exception as e:
+        # Handle other exceptions
+        client.close()
+        #return the faiure object
+        returnObject = {
+                    'code' : 500,
+                    'data'  : {
+                        'message' : 'Server error: ' + str(e)
+                    },
+                    'message' : 'Failure'
+                }
+        return returnObject
+    
+def encrypt(text):
+    # converting text to array of bytes
+    bytes = text.encode('utf-8')
+    # generating the salt
+    salt = bcrypt.gensalt()
+    # Hashing the text
+    hash = bcrypt.hashpw(bytes, salt)
+    return hash
+
         
 # This method updates the database to reflect new available value of hardware
 # when user checks in/checks out number of units specified by quantity
