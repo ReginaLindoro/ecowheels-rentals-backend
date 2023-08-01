@@ -1,12 +1,14 @@
 # app.py
 from flask import Flask, jsonify, request
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 import bson.json_util as json_util
 import certifi
 import json
+from flask_cors import CORS
 
 app = Flask(__name__)
-
+CORS(app)
 ca = certifi.where()
 
 #TODO: take configurations outside
@@ -15,11 +17,6 @@ DB_USER = 'ADAP'
 DB_USER_PASS = 'ADAP'
 MONGO_URI = f'mongodb+srv://{DB_USER}:{DB_USER_PASS}@adapdb.g2igjno.mongodb.net/?retryWrites=true&w=majority'
 DB_NAME = 'ADAPdb'
-
-# Connect to database
-client = MongoClient(MONGO_URI, tlsCAFile=ca)
-db = client[DB_NAME]
-collection = db['Resources']
 
 # variables
 err = {
@@ -30,17 +27,38 @@ err = {
 }
 
 # This method gets hardware information from the database
-@app.route('/getDBHardwareData', methods=['POST'])
+@app.route('/api/getHardware', methods=['GET'])
 def getHWSet():
     try:
-        hwSetData = collection.find()
+        # Connect to database
+        client = MongoClient(MONGO_URI, tlsCAFile=ca)
+        db = client[DB_NAME]
+        collection = db['Resources']
+
+        # Retrieve data from the database and convert to a list of dictionaries
+        hwSetData = list(collection.find())
+
+        # Close the databse connection
+        client.close()
+
+        # Convert the data to a JSON string and return data
         return json_util.dumps(hwSetData)
-    except:
+    except PyMongoError as e:
+        # Handle database-related errors
+        client.close()
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        # Handle other exceptions
+        client.close()
         return err
+    
+@app.route('/api/login', methods=['POST'])
+def confirmLoginInfo():
+    return jsonify({'success': True})
         
 # This method updates the database to reflect new available value of hardware
 # when user checks in/checks out number of units specified by quantity
-@app.route('/placeorder/<user_hw_request>', methods=['GET', 'POST'])
+@app.route('/api/placeorder/<user_hw_request>', methods=['GET', 'POST'])
 def handleResources(user_hw_request):
     data = getHWSet()
     db_hardware_sets = json.loads(data)
@@ -97,9 +115,24 @@ def handleResources(user_hw_request):
 # This method updates the database with new Availability values
 def updateDB(availability, hwSet):
     try:
+        # Connect to database
+        client = MongoClient(MONGO_URI, tlsCAFile=ca)
+        db = client[DB_NAME]
+        collection = db['Resources']
+
+        # Update the 'Available' field
         newValues = { '$set': { 'Available': availability } }
         collection.update_one({'HardwareSet': hwSet}, newValues)
-    except:
+
+        # Close the database connection
+        client.close()
+    except PyMongoError as e:
+        # Handle database-related errors
+        client.close()
+        return {'error': str(e)}
+    except Exception as e:
+        # Handle other exceptions
+        client.close()
         return err
 
 if __name__ == '__main__':
