@@ -58,7 +58,7 @@ def getHWSet():
 #make a standard object creation function
 
 
-@app.route('/api/login', methods=['POST'])
+@app.route('/api/signin', methods=["POST"])
 def login_user():
     #storing the request object
     object = request.json
