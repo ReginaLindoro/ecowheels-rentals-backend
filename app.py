@@ -41,6 +41,7 @@ class StatusCode(Enum):
     CREATION_SUCCESS = 201
     BAD_REQUEST = 400
     WRONG_CREDS = 401
+    NOT_FOUND = 404
     USER_EXISTS = 409
     DATABASE_ERROR = 700
     SERVER_ERROR = 500
@@ -68,6 +69,14 @@ def createErrorObject(statusCode, message):
     elif statusCode is StatusCode.WRONG_CREDS.value:
         return {
             'code': 401,
+            'data': {
+                'message': message
+            },
+            'message': 'Failure'
+        }
+    elif statusCode is StatusCode.NOT_FOUND.value:
+        return {
+            'code': 404,
             'data': {
                 'message': message
             },
@@ -406,6 +415,166 @@ def checkoutHardwareSetsToDB(hwSet1Qty, hwSet2Qty):
         return resultObject
 
 
+# API endpoint for adding a new project
+@app.route('/api/create-project', methods=['POST'])
+def create_project():
+
+    # storing request project
+    projectID = request.json['projectID']
+    name = request.json['name']
+    description = request.json['description']
+
+    result = addproject(projectID=projectID, name=name,
+                        description=description)
+
+    if result['isError']:
+        returnObject = createErrorObject(
+            statusCode=result['statusCode'], message=result['message'])
+        return jsonify(returnObject), result['statusCode']
+    else:
+        returnObject = createSuccessObject(
+            statusCode=result['statusCode'], message=result['message'])
+        return jsonify(returnObject), result['statusCode']
+
+
+def addproject(projectID, name, description):
+    try:
+        # Connect to database
+        client = MongoClient(MONGO_URI, tlsCAFile=ca)
+        db = client[DB_NAME]
+        # getting the project collection
+        projectCollection = db['Projects']
+
+        # check if the collection is empty or not -> to avoid the first project registration
+        if len(list(projectCollection.find())) != 0:
+            # checking for the projectID, if already exists, return an object with an error
+            if projectCollection.find_one({'projectID': projectID}):
+                resultObject = {
+                    'isError': True,
+                    'statusCode': 409,
+                    'message': 'ProjectID already exists'
+                }
+                return resultObject
+
+        # create a new project
+        newProject = {
+            'projectID': projectID,
+            'name': name,
+            'description': description
+        }
+
+        # insert project in the Projects collection
+        projectCollection.insert_one(newProject)
+
+        client.close()
+        # return the success object
+        resultObject = {
+            'isError': False,
+            'statusCode': 201,
+            'message': 'Project added successfully!',
+        }
+        return resultObject
+
+    except PyMongoError as e:
+        # Handle database-related errors
+        client.close()
+        resultObject = {
+            'isError': True,
+            'statusCode': 700,
+            'message': 'Database error: ' + str(e)
+        }
+        return resultObject
+
+    except Exception as e:
+        # Handle other exceptions
+        client.close()
+        resultObject = {
+            'isError': True,
+            'statusCode': 500,
+            'message': 'Server error: ' + str(e)
+        }
+        return resultObject
+
+
+# Route to check if a ProjectID exists in the MongoDB database
+@app.route('/api/join-project', methods=['POST'])
+def checkProjectID():
+    # storing the request object
+    projectID = request.json['projectID']
+
+    result = checkProjectinDB(projectID=projectID)
+
+    if result['isError']:
+        returnObject = createErrorObject(
+            statusCode=result['statusCode'], message=result['message'])
+        return jsonify(returnObject), result['statusCode']
+    else:
+        returnObject = createSuccessObject(
+            statusCode=result['statusCode'], message=result['message'])
+        # TODO:
+        # returnObject = createLoginSucessObject(username=username)
+        return jsonify(returnObject), result['statusCode']
+
+
+# validates projectID
+def checkProjectinDB(projectID):
+    try:
+        # Connect to database
+        client = MongoClient(MONGO_URI, tlsCAFile=ca)
+        db = client[DB_NAME]
+        # getting the collection
+        projectCollection = db['Projects']
+
+        # check if the project collection is empty or not -> avoid checking if project collection is empty
+        if len(list(projectCollection.find())) != 0:
+            # check if project exixts in db
+            project = projectCollection.find_one({'projectID': projectID})
+
+            if project is not None:
+                if project['projectID'] == projectID:
+                    resultObject = {
+                        'isError': False,
+                        'statusCode': 200,
+                        'message': f'Joined Project: {projectID} successfully!'
+                    }
+                    return resultObject
+            else:
+                resultObject = {
+                    'isError': True,
+                    'statusCode': 404,
+                    'message': f'ProjectID {projectID} does not exist! Enter a valid projectID.'
+                }
+                return resultObject
+
+        else:
+            returnObject = {
+                'isError': True,
+                'statusCode': 404,
+                'message': f'There are no projects in the database.'
+            }
+        return returnObject
+
+    except PyMongoError as e:
+        # Handle database-related errors
+        client.close()
+        resultObject = {
+            'isError': True,
+            'statusCode': 700,
+            'message': 'Database error: ' + str(e)
+        }
+        return resultObject
+
+    except Exception as e:
+        # Handle other exceptions
+        client.close()
+        resultObject = {
+            'isError': True,
+            'statusCode': 500,
+            'message': 'Server error: ' + str(e)
+        }
+        return resultObject
+
+
 # TODO: move in different files
 # make utility functions
 # make a standard object creation function
@@ -445,7 +614,8 @@ def checkUserInDB(username, password):
             if usersCollection.find_one({'username': username}):
                 user = usersCollection.find_one({'username': username})
                 passwordFromDB = user.get('password')
-                if passwordValidation(passwordFromDB=passwordFromDB, passwordFromRequest=password):
+                if passwordValidation(
+                    passwordFromDB=passwordFromDB, passwordFromRequest=password):
                     client.close()
                     resultObject = {
                         'isError': False,
@@ -453,7 +623,16 @@ def checkUserInDB(username, password):
                         'message': 'Logged in successfully!'
                     }
                     return resultObject
-            # if any of those two fail, return error object
+                # if password is wrong, return error object
+                else:
+                    client.close()
+                    resultObject = {
+                        'isError': True,
+                        'statusCode': 401,
+                        'message': 'Username or Password is wrong. Please try again!'
+                    }
+                    return resultObject
+            # if username is wrong, return error object
             else:
                 client.close()
                 resultObject = {
