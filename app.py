@@ -8,6 +8,10 @@ import json
 from flask_cors import CORS
 import bcrypt
 from enum import Enum
+#TODO:
+# from flask_jwt_extended import create_access_token
+# from flask_jwt_extended import JWTManager
+# from flask_jwt_extended import jwt_required
 
 app = Flask(__name__)
 CORS(app)
@@ -20,6 +24,11 @@ DB_USER_PASS = 'ADAP'
 MONGO_URI = f'mongodb+srv://{DB_USER}:{DB_USER_PASS}@adapdb.g2igjno.mongodb.net/?retryWrites=true&w=majority'
 DB_NAME = 'ADAPdb'
 
+#TODO: ADD JWT LATER
+# app.config['JWT_SECRET_KEY'] = 'd4949995b0fff3aa8a69cf35092c71bdfa45388049089b91ad77a8f7a41aa61d699fdab8'
+# jwt = JWTManager(app)
+
+
 # variables
 err = {
     "error": {
@@ -30,6 +39,8 @@ err = {
 
 # This method gets hardware information from the database
 @app.route('/api/getHardware', methods=['GET'])
+#TODO:
+# @jwt_required()
 def getHWSet():
     try:
         # Connect to database
@@ -57,7 +68,9 @@ def getHWSet():
 #TODO: move all these error functions to a different file
 
 #Enum of all error types
-class ErrorType(Enum):
+class StatusCode(Enum):
+    SUCCESS = 200
+    CREATION_SUCCESS = 201
     WRONG_CREDS = 401
     USER_EXISTS = 409
     DATABASE_ERROR = 700
@@ -67,8 +80,8 @@ class ErrorType(Enum):
 #this function creates an error object
 #errorType -> to check with errorType
 #message -> message returned from exception or a custom message
-def createErrorObject(errorType, message):
-    if errorType is ErrorType.WRONG_CREDS.value:
+def createErrorObject(statusCode, message):
+    if statusCode is StatusCode.WRONG_CREDS.value:
         return {
                     'code' : 401,
                     'data'  : {
@@ -76,7 +89,7 @@ def createErrorObject(errorType, message):
                     },
                     'message' : 'Failure'
                 }
-    elif errorType is ErrorType.USER_EXISTS.value:
+    elif statusCode is StatusCode.USER_EXISTS.value:
         return {
                     'code' : 409,
                     'data'  : {
@@ -84,7 +97,7 @@ def createErrorObject(errorType, message):
                     },
                     'message' : 'Failure'
                 }
-    elif errorType is ErrorType.SERVER_ERROR.value:
+    elif statusCode is StatusCode.SERVER_ERROR.value:
         return {
                     'code' : 500,
                     'data'  : {
@@ -92,7 +105,7 @@ def createErrorObject(errorType, message):
                     },
                     'message' : 'Failure'
                 }
-    elif errorType is ErrorType.DATABASE_ERROR.value:
+    elif statusCode is StatusCode.DATABASE_ERROR.value:
         return {
                     'code' : 700,
                     'data'  : {
@@ -101,9 +114,21 @@ def createErrorObject(errorType, message):
                     'message' : 'Failure'
                 }
 
-def createSuccessObject(message):
+#TODO:
+#creates the login success object with access token
+# def createLoginSucessObject(username):
+#     return {
+#                 'code' : 200,
+#                 'data'  : {
+#                     'accessToken' : create_access_token(identity=username)
+#                 },
+#                 'message' : 'Success'
+#             }
+
+#creates a success object with a message and status code
+def createSuccessObject(statusCode, message):
     return {
-                'code' : 200,
+                'code' : statusCode,
                 'data'  : {
                     'message' : message
                 },
@@ -114,7 +139,7 @@ def createSuccessObject(message):
 #make utility functions
 #make a standard object creation function
 
-
+#route for login
 @app.route('/api/login', methods=['POST'])
 def login_user():
     #storing the request object
@@ -124,12 +149,15 @@ def login_user():
     result = checkUserInDB(username=username, password=password)
 
     if result['isError']:
-        returnObject = createErrorObject(errorType=result['errorCode'], message=result['message'])
-        return jsonify(returnObject), result['errorCode']
+        returnObject = createErrorObject(statusCode=result['statusCode'], message=result['message'])
+        return jsonify(returnObject), result['statusCode']
     else:
-        returnObject = createSuccessObject(message=result['message'])
-        return jsonify(returnObject), 200
+        returnObject = createSuccessObject(statusCode= result['statusCode'],message=result['message'])
+        #TODO:
+        # returnObject = createLoginSucessObject(username=username)
+        return jsonify(returnObject), result['statusCode']
 
+#validates username and password
 def checkUserInDB(username, password):
     try:
         # Connect to database
@@ -146,24 +174,33 @@ def checkUserInDB(username, password):
                 passwordFromDB = user.get('password')
                 if passwordValidation(passwordFromDB=passwordFromDB, passwordFromRequest=password):
                     resultObject = {
-                        'isError' : False,
+                        'isError': False,
+                        'statusCode': 200,
                         'message': 'Logged in successfully!'
                     }
                     return resultObject
             #if any of those two fail, return error object
             else:
                 resultObject = {
-                        'isError' : True,
-                        'errorCode': 401,
+                        'isError': True,
+                        'statusCode': 401,
                         'message': 'Username or Password is wrong. Please try again!'
                     }
                 return resultObject
+        #if there is no user in db, return error
+        else:
+            resultObject = {
+                        'isError': True,
+                        'statusCode': 404,
+                        'message': 'Users not found! Database has no users registered yet.'
+                    }
+            return resultObject
     except PyMongoError as e:
         # Handle database-related errors
         client.close()
         resultObject = {
-                    'isError' : True,
-                    'errorCode': 700,
+                    'isError': True,
+                    'statusCode': 700,
                     'message': 'Database error: ' + str(e)
                 }
         return resultObject
@@ -171,12 +208,13 @@ def checkUserInDB(username, password):
         # Handle other exceptions
         client.close()
         resultObject = {
-                    'isError' : True,
-                    'errorCode': 500,
+                    'isError': True,
+                    'statusCode': 500,
                     'message': 'Server error: ' + str(e)
                 }
         return resultObject
 
+#this function validates the passwords from request and db
 def passwordValidation(passwordFromDB, passwordFromRequest):
     #encode the password from request
     passwordFromRequest = passwordFromRequest.encode('utf-8')
@@ -198,11 +236,11 @@ def register_user():
     result = addUser(username=username, password=password) 
 
     if result['isError']:
-        returnObject = createErrorObject(errorType=result['errorCode'], message=result['message'])
-        return jsonify(returnObject), result['errorCode']
+        returnObject = createErrorObject(statusCode=result['statusCode'], message=result['message'])
+        return jsonify(returnObject), result['statusCode']
     else:
-        returnObject = createSuccessObject(message=result['message'])
-        return jsonify(returnObject), 200
+        returnObject = createSuccessObject(statusCode=result['statusCode'],message=result['message'])
+        return jsonify(returnObject), result['statusCode']
 
 #add user to db
 def addUser(username, password):
@@ -219,7 +257,7 @@ def addUser(username, password):
             if usersCollection.find_one({'username' : username}):
                 resultObject = {
                     'isError' : True,
-                    'errorCode': 409,
+                    'statusCode': 409,
                     'message': 'User already exists'
                 }
                 return resultObject
@@ -227,7 +265,7 @@ def addUser(username, password):
         #create a new user
         newUser = {
             'username' : username, 
-            'password' : password,
+            'password' : encrypt(password),
         }
 
         #insert user in the users collection
@@ -236,7 +274,8 @@ def addUser(username, password):
         #return the success object
         resultObject = {
                         'isError' : False,
-                        'message': 'User added successfully!'
+                        'statusCode': 201,
+                        'message': 'User added successfully!',
                     }
         return resultObject
     except PyMongoError as e:
@@ -244,7 +283,7 @@ def addUser(username, password):
         client.close()
         resultObject = {
                     'isError' : True,
-                    'errorCode': 700,
+                    'statusCode': 700,
                     'message': 'Database error: ' + str(e)
                 }
         return resultObject
@@ -254,11 +293,15 @@ def addUser(username, password):
         client.close()
         resultObject = {
                     'isError' : True,
-                    'errorCode': 500,
+                    'statusCode': 500,
                     'message' : 'Server error: ' + str(e)
                 }
         return resultObject
-    
+
+#this function ecrypts the text passed to it
+#converts into binary 
+#adds salt
+#hashes the text and salt together
 def encrypt(text):
     # converting text to array of bytes
     bytes = text.encode('utf-8')
