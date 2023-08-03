@@ -420,7 +420,7 @@ def checkoutHardwareSetsToDB(hwSet1Qty, hwSet2Qty):
 def create_project():
 
     # storing request project
-    projectID = request.json['projectID']
+    projectID = request.json['projectId']
     name = request.json['name']
     description = request.json['description']
 
@@ -500,7 +500,7 @@ def addproject(projectID, name, description):
 @app.route('/api/join-project', methods=['POST'])
 def checkProjectID():
     # storing the request object
-    projectID = request.json['projectID']
+    projectID = request.json['projectId']
 
     result = checkProjectinDB(projectID=projectID)
 
