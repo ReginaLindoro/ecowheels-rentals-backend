@@ -297,7 +297,7 @@ def checkinHardwareSetsToDB(hwSet1Qty, hwSet2Qty):
                     resultObject = {
                         'isError': True,
                         'statusCode': 400,
-                        'message': 'Trying to checkin more hardware than total capacity! Atleast 1 or more values are entered wrong. Please try again.'
+                        'message': 'Trying to checkin more hardware than total capacity! The value entered is wrong. Please try again.'
                     }
                     return resultObject
         # if both hardwares are not present, throw error
@@ -373,7 +373,7 @@ def checkoutHardwareSetsToDB(hwSet1Qty, hwSet2Qty):
                     resultObject = {
                         'isError': True,
                         'statusCode': 400,
-                        'message': 'Trying to checkout more hardware than available! Atleast 1 or more values are entered wrong. Please try again.'
+                        'message': 'Trying to checkout more hardware than available! The value entered is wrong. Please try again.'
                     }
                     return resultObject
         # if both hardwares are not present, throw error
